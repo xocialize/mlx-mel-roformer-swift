@@ -49,4 +49,9 @@ let vocals = response[.vocals]            // Audio(.wav, 44.1 kHz stereo)
 let instrumental = response[.instrumental]
 ```
 
+## Consuming it
+
+Public + version-tagged on github.com/xocialize. Add by tagged URL:
+`.package(url: "https://github.com/xocialize/mlx-mel-roformer-swift", from: "0.1.0")`, then import `MLXMelRoFormer` (the conformant `audioSeparation` package). Builds standalone — its engine contract (`MLXToolKit`) and model-core dependencies are tagged-URL net deps, no local checkouts.
+
 Requirements: macOS 26+ (Apple Silicon, Metal GPU). Port code MIT; weights MIT.
