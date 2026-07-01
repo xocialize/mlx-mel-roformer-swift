@@ -19,8 +19,10 @@ struct MelRoFormerSeparationTests {
         let r = MelRoFormerSeparationPackage.manifest.requirements
         #expect(r.requiredBackends.contains(.metalGPU))
         #expect(r.os.minMacOS == SemanticVersion(major: 26, minor: 0, patch: 0))
-        #expect(r.footprints.contains { $0.quant == .bf16 && $0.residentBytes == 1_500_000_000 })
-        #expect(r.footprints.contains { $0.quant == .fp16 && $0.residentBytes == 600_000_000 })
+        // Split footprint (contract 1.14): per-variant resident weight floor + chunk-bounded
+        // transient activation. Both variants declare a non-zero activation peak.
+        #expect(r.footprints.contains { $0.quant == .bf16 && $0.residentBytes == 700_000_000 && $0.peakActivationBytes == 800_000_000 })
+        #expect(r.footprints.contains { $0.quant == .fp16 && $0.residentBytes == 300_000_000 && $0.peakActivationBytes == 300_000_000 })
     }
 
     @Test func surfaceIsTheCanonicalSeparationDescriptor() {

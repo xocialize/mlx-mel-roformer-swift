@@ -27,9 +27,26 @@ public final class MelRoFormerSeparationPackage: ModelPackage {
             provenance: Provenance(sourceRepo: "mlx-community/mel-roformer-kim-vocal-2-mlx",
                                    revision: "main", tier: 1),
             requirements: RequirementsManifest(
+                // Split footprint (contract 1.14), per-variant via QuantConfigured (the two variants
+                // are distinguished by quant). The transient is *chunk-bounded*: RoFormer processes
+                // audio in fixed 8-second chunks (352,800 samples @ 44.1 kHz — SwiftRoFormer
+                // `RoFormerConfiguration.chunkSize`) through the STFT + dual-axis transformer, so the
+                // activation tracks the chunk working set, not clip length (the Real-ESRGAN tile lesson).
+                //
+                // Weight floors from mlx-community on-disk bytes:
+                //   kimVocal2 (228M, bf16)      — model.safetensors 456 MB → ~0.7 GB resident w/ overhead
+                //   zfturboVocalsV1 (33M, fp16) — model.safetensors  67 MB → ~0.3 GB resident w/ overhead
+                //
+                // ⚠️ peakActivationBytes is a SMOKE ESTIMATE (prior flat minus the measured weight floor,
+                // scaled to the 8 s chunk envelope); in-app phys_footprint reads ~2.5–2.9× higher —
+                // IN-APP PHYS RE-BASELINE PENDING (the admission basis, R-MEM-1).
                 footprints: [
-                    QuantFootprint(quant: .bf16, residentBytes: 1_500_000_000),  // kimVocal2 (228M)
-                    QuantFootprint(quant: .fp16, residentBytes: 600_000_000),    // zfturboVocalsV1 (33M)
+                    QuantFootprint(quant: .bf16,                                 // kimVocal2 (228M)
+                                   residentBytes: 700_000_000,
+                                   peakActivationBytes: 800_000_000),
+                    QuantFootprint(quant: .fp16,                                 // zfturboVocalsV1 (33M)
+                                   residentBytes: 300_000_000,
+                                   peakActivationBytes: 300_000_000),
                 ],
                 requiredBackends: [.metalGPU],
                 os: OSRequirement(minMacOS: SemanticVersion(major: 26, minor: 0, patch: 0)),
@@ -68,6 +85,10 @@ public final class MelRoFormerSeparationPackage: ModelPackage {
 
     public func unload() async {
         separator = nil
+        // Drop the model's weight/activation buffers from MLX's pool too — niling the ref alone
+        // leaves them cached, so phys_footprint doesn't fall and engine.evict / R-MEM-1 can't
+        // reclaim (RSS then grows monotonically across model switches). Contract 1.14 requirement.
+        MLX.Memory.clearCache()
     }
 
     public func run(_ request: any CapabilityRequest) async throws -> any CapabilityResponse {

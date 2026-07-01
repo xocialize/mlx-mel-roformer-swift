@@ -28,7 +28,7 @@ public enum MelRoFormerVariant: String, Codable, Sendable, CaseIterable {
     }
 
     /// Shipped quantization of the published weights.
-    var quant: Quant {
+    public var quant: Quant {
         switch self {
         case .kimVocal2: return .bf16
         case .zfturboVocalsV1: return .fp16
@@ -46,9 +46,18 @@ public enum MelRoFormerVariant: String, Codable, Sendable, CaseIterable {
 
 /// Init-time configuration for `MelRoFormerSeparationPackage` (C9): which published checkpoint
 /// to load. Per-request input/stems ride the `AudioSeparationRequest`, not here.
-public struct MelRoFormerConfiguration: PackageConfiguration, ModelStorable {
+///
+/// Conforms to `QuantConfigured` so the memory governor charges the *selected* variant's declared
+/// `QuantFootprint` (the two variants are distinguished by quant: kimVocal2 bf16 vs
+/// zfturboVocalsV1 fp16) instead of the largest-that-fits heuristic — mirrors how NAFNet's two
+/// size variants declare per-variant footprints.
+public struct MelRoFormerConfiguration: PackageConfiguration, ModelStorable, QuantConfigured {
     /// Which published Mel-Band-RoFormer checkpoint to load.
     public var variant: MelRoFormerVariant
+
+    /// Selected variant's shipped quantization (bf16 for kimVocal2, fp16 for zfturboVocalsV1).
+    /// Exposed for `QuantConfigured` so the governor matches the right per-variant footprint.
+    public var quant: Quant { variant.quant }
     /// Where weights are materialized. Set by the engine from its `ModelStore`; `nil` → the
     /// default swift-transformers cache. Excluded from `Codable` (environment-specific).
     public var modelsRootDirectory: URL?
